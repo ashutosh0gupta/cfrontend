@@ -1,0 +1,6 @@
+case `uname` in Darwin*) glibtoolize --copy ;;
+  *) libtoolize --copy ;; esac
+aclocal -I m4
+autoheader 
+automake --add-missing --force-missing --copy --foreign 
+autoconf

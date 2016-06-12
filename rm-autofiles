@@ -1,0 +1,45 @@
+#! /bin/sh
+# This file 'attempts' to remove any generated file in 
+# source directories or top folder due to a build and autotool
+
+if test -e Makefile; then # TODO
+   make distclean
+   rm -rf Makefile
+fi
+
+if test -e build/Makefile; then
+   cd build
+   make distclean
+   cd ..
+fi
+
+# Remove Makefiles from src directory structure
+cd src 
+find -name "Makefile" | xargs rm -rf 
+find -name "Makefile.in" | xargs rm -rf 
+find -name ".deps" | xargs rm -rf 
+# some cleanup which is not usually cleaned
+# TODO: add this clean up in "make clean"
+# cd parsers
+# find -name "*.cc" | xargs rm -rf 
+# find -name "*.h"  | xargs rm -rf 
+# find -name "*.hh" | xargs rm -rf 
+# cd ../../
+cd ..
+rm -rf *~ */*~ */*/*~ */*/*~
+# delete auto generated files by autotools
+rm -rf libtool
+rm -rf autom4te.cache
+rm -rf .deps
+rm -rf aclocal.m4
+rm -rf m4/libtool.m4
+rm -rf m4/ltsugar.m4
+rm -rf m4/lt~obsolete.m4
+rm -rf m4/ltoptions.m4
+rm -rf m4/ltversion.m4
+rm -rf configure
+rm -rf config.log
+rm -rf config.status
+rm -rf autotools
+rm -rf Makefile.in
+rm -rf cfrontend_config.h.in
