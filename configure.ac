@@ -200,7 +200,7 @@ if test $llvm_custom = 1 ; then
    llvm_path=$with_llvm
 else
   # TODO: auto detect llvm
-   llvm_path=/usr/lib/llvm-3.4
+   llvm_path=/usr/lib/llvm-3.6
 fi
 
 AC_CHECK_PROG(LLVM_CONFIG_CHECK,llvm-config,yes,no,$llvm_path/bin)

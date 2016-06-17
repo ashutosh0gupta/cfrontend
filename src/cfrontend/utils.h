@@ -54,6 +54,8 @@ namespace cfrontend{
 #define COMPARE_SELF4( B, F1, F2, F3, F4 ) COMPARE_TAIL( F1, B.F1, \
         COMPARE_SELF3( B, F2, F3, F4 ) )
 
+#define LLCAST(A,B,C) const llvm::A* B = llvm::dyn_cast<llvm::A>(C)
+
 template <class T>
 inline bool exists( std::vector<T>& vec, T item ) {
   return std::find( vec.begin(), vec.end(), item ) != vec.end();

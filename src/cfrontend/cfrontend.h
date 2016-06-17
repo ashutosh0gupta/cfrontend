@@ -34,10 +34,14 @@ namespace cfrontend{
     public:
       Config() {
         dumpLLVMcfg = false;
+        verbose_set.insert( "mkthread");
       };
 
       // getter functions
       bool chkVeboseLevel( unsigned level ) { return level > verbosity; }
+      bool verbose( const std::string str ) const {
+        return verbose_set.find(str) != verbose_set.end();
+      }
       std::ostream& out() { return std::cout; }
       std::string& getInputFile() { return inputFileName; }
       std::vector< std::pair<std::string,int> >& setThreadList() {
@@ -55,7 +59,8 @@ namespace cfrontend{
 
     private:
       std::string inputFileName;
-      unsigned verbosity;
+      unsigned verbosity; // todo: outdated
+      std::set< std::string > verbose_set;
       std::vector< std::pair<std::string,int> > threadList;
       bool dumpLLVMcfg;
     };

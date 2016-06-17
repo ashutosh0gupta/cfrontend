@@ -5,8 +5,11 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include "llvm/Pass.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/Support/raw_ostream.h"
 #pragma GCC diagnostic pop
 
+#include "cfrontend/cfrontend.h"
 #include "cfrontend/program.h"
 #include "cfrontend/llvmUtils.h"
 #include <map>
@@ -22,7 +25,7 @@ namespace cfrontend{
   };
 
   template <typename EHandler>
-  class BuildSimpleMultiThreadedProgram : public llvm::FunctionPass {
+  class BuildSMTProgram : public llvm::FunctionPass {
   public:
     typedef typename
     SimpleMultiThreadedProgram<typename EHandler::expr>::location_id_type
@@ -35,12 +38,14 @@ namespace cfrontend{
 
     static char ID;
 
-    BuildSimpleMultiThreadedProgram( EHandler* eHandler_,
+    BuildSMTProgram( EHandler* eHandler_,
+                     Cfrontend::Config& config_,
       SimpleMultiThreadedProgram<typename EHandler::expr>* program_ )
-    : llvm::FunctionPass(ID)
-    , eHandler( eHandler_ )
-    , program( program_ )
-    , threadCount( 0 )
+      : llvm::FunctionPass(ID)
+      , eHandler( eHandler_ )
+      , config(config_)
+      , program( program_ )
+      , threadCount( 0 )
     {}
 
     virtual bool runOnFunction( llvm::Function & );
@@ -54,6 +59,7 @@ namespace cfrontend{
 
   private:
     EHandler* eHandler;
+    Cfrontend::Config& config;
     SimpleMultiThreadedProgram<typename EHandler::expr>* program;
     unsigned threadCount;
     std::map< const llvm::BasicBlock*, program_location_id_t > numBlocks;
@@ -82,14 +88,24 @@ namespace cfrontend{
 
     typename EHandler::expr
     getTerm( const llvm::Value* op ,ValueExprMap& m ) {
-      if( const llvm::Constant* c = llvm::dyn_cast<llvm::Constant>(op) ) {
+      if( const llvm::ConstantInt* c = llvm::dyn_cast<llvm::ConstantInt>(op) ) {
         int i = readInt( c );
         return eHandler->mkIntVal( i );
+      }else if( auto c = llvm::dyn_cast<llvm::ConstantPointerNull>(op) ) {
+      // }else if( LLCAST( ConstantPointerNull, c, op) ) {
+        return eHandler->mkIntVal( 0 );
+      }else if( const llvm::Constant* c = llvm::dyn_cast<llvm::Constant>(op) ) {
+        cfrontend_error( "un recognized constant!" );
+        // int i = readInt(c);
+        // return eHandler->mkIntVal( i );
       }else if( eHandler->isLocalVar( op ) ) {
         return eHandler->getLocalVar( op );
       }else{
         auto it = m.find( op );
-        if( it == m.end() ) cfrontend_error( "local term not found!" );
+        if( it == m.end() ) {
+          op->print( llvm::outs() ); //llvm::outs() << "\n";
+          cfrontend_error( "local term not found!" );
+        }
         return it->second;
       }
     }

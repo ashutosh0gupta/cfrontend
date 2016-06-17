@@ -8,6 +8,9 @@
 
 // namespace cfrontend{
 
+//----------------------------------------------------------------------------
+//Specify static
+
   llvm::cl::opt<std::string>
   inputFileName_static( llvm::cl::Positional,
                         llvm::cl::desc( "<input LLVM bitcode file>" ),
@@ -20,10 +23,16 @@
   verbosity_static_a("v", llvm::cl::desc("Alias for -verbose"),
                      llvm::cl::aliasopt(verbosity_static));
 
+
+  llvm::cl::opt<bool>
+  outLLVMcfg_static( "out-cfg", llvm::cl::desc("out LLVM cfg") );
+
   llvm::cl::list<std::string>
   threadList_static("thr",
         llvm::cl::desc("comma seperated list of threads (<funName>,copyNum,)+"),
                     llvm::cl::CommaSeparated);
+
+//----------------------------------------------------------------------------
 
   void c2bc( std::string& filename, std::string& outname ) {
     // make a system call
@@ -70,7 +79,7 @@ void cmdParser( int argc, char * argv[], cfrontend::Cfrontend::Config* config ){
         cfrontend_error( "expect *.bc or *.c filename!" );
     }
 
-
+    config->setOutLLVMcfg( outLLVMcfg_static );
     config->setInputFileName( inputFileName );
     config->setVerbosity( verbosity_static );
 

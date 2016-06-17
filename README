@@ -6,7 +6,7 @@ $ ./init-autotools
 $ mkdir build
 $ cd build
 $ ../configure --with-llvm=[if llvm is not available at std location]
-#--with-z3=$HOME/research/code/externalTools/z3-interface/z3-latest
+#../configure --with-z3=$HOME/research/code/externalTools/z3-interface/z3-latest
 $ make
 
 ==============================================================================
@@ -19,13 +19,18 @@ $clang -emit-llvm in.c -o out.bc -c
  AUTHORS
 ==============================================================================
 
-Ashutosh Gupta <agupta@ist.ac.at>
+Ashutosh Gupta <agupta@tifr.res.in>
 Bernhard Kragl <bkragl@ist.ac.at>
 
 ==============================================================================
  HINTS FOR DEVELOPERS
 ==============================================================================
 
+For debugging
+-------------
+
+$../configure --enable-debug --disable-optimization --with-z3=[z3-path]
+$ make
 
 Running cfrontend in profiling mode
 ------------------------------

@@ -1,6 +1,7 @@
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/DebugInfo.h"
-#include "llvm/Support/InstIterator.h"
+#include "llvm/IR/DebugInfo.h"
+// #include "llvm/Support/InstIterator.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -142,8 +143,8 @@ namespace cfrontend{
       unsigned lineNum = 0;
       if( const llvm::DbgDeclareInst* dDecl =
           llvm::dyn_cast<llvm::DbgDeclareInst>(I) ) {
-        cfrontend_error( "buildLocalNameMap should be called only after"
-                         << " PromoteMemoryToRegister pass" );
+        // cfrontend_error( "buildLocalNameMap should be called only after"
+        //                  << " PromoteMemoryToRegister pass" );
         var = dDecl->getAddress();
         md = dDecl->getVariable();
         llvm::DIVariable diMd(md);
@@ -198,10 +199,10 @@ namespace cfrontend{
     }
   }
 
-  int readInt( const llvm::Constant* c ) {
-    const llvm::APInt n = c->getUniqueInteger();
+  int readInt( const llvm::ConstantInt* c ) {
+    const llvm::APInt& n = c->getUniqueInteger();
     unsigned len = n.getNumWords();
-    if( len > 1 ) cfrontend_error( "too long integer in input program!!" );
+    if( len > 1 ) cfrontend_error( "long integers not supported!!" );
     const uint64_t *v = n.getRawData();
     return *v;
   }
@@ -221,17 +222,17 @@ namespace cfrontend{
       os <<  tagName;
     else
       os << std::hex << tag << std::dec;
-
+    //Todo: this is not working
     for( unsigned i = 1; i < numOps; i++ ) {
-      llvm::Value* vi = md->getOperand(i);
+    //   llvm::Metadata& vi = *(md->getOperand(i));
       os << ",";
-      if( vi == NULL ) {
-        os << "NULL";
-      }else if( llvm::MDNode* md_i = llvm::dyn_cast<llvm::MDNode>(vi ) ) {
-        printMetaData( os, md_i );
-      }else{
-        os << (std::string)( md->getOperand(i)->getName() );
-      }
+    //   if( vi == NULL ) {
+    //     os << "NULL";
+    //   }else if( llvm::MDNode* md_i = llvm::dyn_cast<llvm::MDNode>(vi ) ) {
+    //     printMetaData( os, md_i );
+    //   }else{
+    //     os << (std::string)( md->getOperand(i)->getName() );
+    //   }
     }
     os << "}";
   }

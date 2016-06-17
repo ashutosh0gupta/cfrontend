@@ -3,13 +3,14 @@
 
 // pragam'ed to aviod warnings due to llvm included files
 
-#include "llvm/Support/InstIterator.h"
+#include "llvm/IRReader/IRReader.h"
 
-#include "llvm/Assembly/Writer.h"
+#include "llvm/IR/InstIterator.h"
+
 #include "llvm/LinkAllPasses.h"
 #include "llvm/Pass.h"
 #include "llvm/PassManager.h"
-#include "llvm/DebugInfo.h"
+#include "llvm/IR/DebugInfo.h"
 
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -59,7 +60,7 @@ namespace cfrontend{
 
   template <typename EHandler>
   void
-  BuildSimpleMultiThreadedProgram<EHandler>::
+  BuildSMTProgram<EHandler>::
   resetPendingInsertEdge() {
     pendingSrc.clear();
     pendingDst.clear();
@@ -71,7 +72,7 @@ namespace cfrontend{
 
   template <typename EHandler>
   void
-  BuildSimpleMultiThreadedProgram<EHandler>::
+  BuildSMTProgram<EHandler>::
   addPendingInsertEdge( unsigned src, unsigned dst,
                              typename EHandler::expr e ) {
     pendingSrc.push_back( src );
@@ -83,7 +84,7 @@ namespace cfrontend{
 
   template <typename EHandler>
   void
-  BuildSimpleMultiThreadedProgram<EHandler>::
+  BuildSMTProgram<EHandler>::
   applyPendingInsertEdges( unsigned tid ) {
     unsigned pendingLength = pendingSrc.size();
     std::vector<bool> doneIdxs;
@@ -111,7 +112,7 @@ namespace cfrontend{
 
   template <typename EHandler>
   typename EHandler::expr
-  BuildSimpleMultiThreadedProgram<EHandler>::
+  BuildSMTProgram<EHandler>::
   getPhiMap( const llvm::PHINode* p, ValueExprMap& m ) {
     static std::vector< const llvm::PHINode* > visited;
     if( exists( visited, p) ) return getTerm( p, m);
@@ -153,6 +154,8 @@ namespace cfrontend{
           }
         }//else{ cfrontend_error( "undebugged and unmapped value found!!" ); }
       }
+      if( findXp )
+        cfrontend_error( "next value xp not found!!" );
 
       unsigned i = 1;
       for(; i < eList.size(); i++ ) {
@@ -256,11 +259,11 @@ namespace cfrontend{
   }
 
   template <class ExprHandler>
-  char BuildSimpleMultiThreadedProgram<ExprHandler>::ID = 0;
+  char BuildSMTProgram<ExprHandler>::ID = 0;
 
   template <typename EHandler>
-  typename BuildSimpleMultiThreadedProgram<EHandler>::program_location_id_t
-  BuildSimpleMultiThreadedProgram<EHandler>::
+  typename BuildSMTProgram<EHandler>::program_location_id_t
+  BuildSMTProgram<EHandler>::
   getBlockCount( const llvm::BasicBlock* b  ) {
     auto it_num = numBlocks.find( b );
     if( it_num == numBlocks.end() ) {
@@ -273,7 +276,7 @@ namespace cfrontend{
 
   template <typename EHandler>
   typename EHandler::expr
-  BuildSimpleMultiThreadedProgram<EHandler>::
+  BuildSMTProgram<EHandler>::
   translateBlock( llvm::BasicBlock* b, unsigned succ, ValueExprMap& m ) {
     assert(b);
     std::vector<typename EHandler::expr> blockTerms;
@@ -357,10 +360,26 @@ namespace cfrontend{
         record = 1;
         assert( !recognized );recognized = true;
       }
-      UNSUPPORTED_INSTRUCTIONS( ReturnInst,      I );
+      if( auto ret = llvm::dyn_cast<llvm::ReturnInst>(I) ) {
+        llvm::Value* v = ret->getReturnValue();
+        if( v ) {
+          typename EHandler::expr retTerm = getTerm( v, m );
+          //todo: use retTerm somewhere
+        }
+        if( config.verbose("mkthread") )
+          cfrontend_warning( "return value ignored!!" );
+        assert( !recognized );recognized = true;
+      }
+      if( auto unreach = llvm::dyn_cast<llvm::UnreachableInst>(I) ) {
+        if( config.verbose("mkthread") )
+          cfrontend_warning( "unreachable instruction ignored!!" );
+        assert( !recognized );recognized = true;
+      }
+
+      // UNSUPPORTED_INSTRUCTIONS( ReturnInst,      I );
       UNSUPPORTED_INSTRUCTIONS( InvokeInst,      I );
       UNSUPPORTED_INSTRUCTIONS( IndirectBrInst,  I );
-      UNSUPPORTED_INSTRUCTIONS( UnreachableInst, I );
+      // UNSUPPORTED_INSTRUCTIONS( UnreachableInst, I );
 
       if( const llvm::BranchInst* br = llvm::dyn_cast<llvm::BranchInst>(I) ) {
         if( br->isConditional() ) {
@@ -381,9 +400,9 @@ namespace cfrontend{
       }
       if( const llvm::CallInst* str = llvm::dyn_cast<llvm::CallInst>(I) ) {
         if( const llvm::DbgValueInst* dVal =
-            llvm::dyn_cast<llvm::DbgValueInst>(I)) {
+            llvm::dyn_cast<llvm::DbgValueInst>(I) ) {
           // Ignore debug instructions
-        }else{cfrontend_warning( "I am caller!!" );}
+        }else{ cfrontend_warning( "I am caller!!" ); }
         assert( !recognized );recognized = true;
       }
       // Store in term map the result of current instruction
@@ -405,9 +424,8 @@ namespace cfrontend{
   }
 
   template <typename EHandler>
-  void
-  BuildSimpleMultiThreadedProgram<EHandler>::
-  initBlockCount( llvm::Function &f, size_t threadId ) {
+  void BuildSMTProgram<EHandler>::initBlockCount( llvm::Function &f,
+                                                  size_t threadId ) {
     numBlocks.clear();
     auto it  = f.begin();
     auto end = f.end();
@@ -419,13 +437,16 @@ namespace cfrontend{
         program->setErrorLocation( threadId, new_l );
       }
     }
+    llvm::BasicBlock& b  = f.getEntryBlock();
+    unsigned entryLoc = getBlockCount( &b );
+    program->setStartLocation( threadId, entryLoc );
+    auto finalLoc = program->createFreshLocation(threadId);
+    program->setFinalLocation( threadId, finalLoc );
   }
 
 
   template <typename EHandler>
-  bool
-  BuildSimpleMultiThreadedProgram<EHandler>::
-  runOnFunction( llvm::Function &f ) {
+  bool BuildSMTProgram<EHandler>::runOnFunction( llvm::Function &f ) {
     threadCount++;
     std::string name = (std::string)f.getName();
     thread_id_t threadId = program->addThread( name );
@@ -435,7 +456,7 @@ namespace cfrontend{
 
     //iterate over debug instructions
 
-    // TODO: remove nameExprMap from to avoid uglyness of accessing
+    // TODO: remove nameExprMap from to avoid ugliness of accessing
     // maps with z3 expressions
     std::map< std::string, typename EHandler::expr> nameExprMap;
     std::map< std::string, typename EHandler::expr> nameNextExprMap;
@@ -447,6 +468,9 @@ namespace cfrontend{
       const llvm::Value* v = it->first;
       std::string name = it->second;
       std::string nameNext = name + "__p";
+      if( config.verbose("mkthread") ) {
+        std::cout << "local variable discovered: "<< name << "\n";
+      }
       if( nameExprMap.find(name) == nameExprMap.end() ) {
         typename EHandler::expr lv  = eHandler->mkVar( name  );
         typename EHandler::expr lvp = eHandler->mkVar( nameNext );
@@ -468,15 +492,22 @@ namespace cfrontend{
 
     for( auto it = f.begin(), end = f.end(); it != end; it++ ) {
       llvm::BasicBlock* src = &(*it);
+      if( config.verbose("mkthread") ) src->print( llvm::outs() );
       unsigned srcLoc = getBlockCount( src );
       llvm::TerminatorInst* c= (*it).getTerminator();
       unsigned num = c->getNumSuccessors();
-      for( unsigned i=0; i < num; ++i ) {
-        llvm::BasicBlock* dst = c->getSuccessor(i);
-        unsigned dstLoc = getBlockCount( dst );
-        // ith branch may be tranlate differently
-        typename EHandler::expr e = translateBlock( src, i, exprMap );
+      if( num == 0 ) {
+        typename EHandler::expr e = translateBlock( src, 0, exprMap );
+        auto dstLoc = program->getFinalLocation( threadId );
         program->addBlock( threadId, srcLoc, dstLoc, e );
+      }else{
+        for( unsigned i=0; i < num; ++i ) {
+          // ith branch may be tranlate differently
+          typename EHandler::expr e = translateBlock( src, i, exprMap );
+          llvm::BasicBlock* dst = c->getSuccessor(i);
+          unsigned dstLoc = getBlockCount( dst );
+          program->addBlock( threadId, srcLoc, dstLoc, e );
+        }
       }
     }
     applyPendingInsertEdges( threadId );
@@ -489,11 +520,11 @@ namespace cfrontend{
   SimpleMultiThreadedProgram<typename ExprHandler::expr>*
   Cfrontend::pass( ExprHandler* eHandler, std::string& filename ) {
 
-    llvm::OwningPtr<llvm::Module> module;
+    std::unique_ptr<llvm::Module> module;
     llvm::SMDiagnostic err;
     llvm::LLVMContext& context = llvm::getGlobalContext();
 
-    module.reset(llvm::ParseIRFile( filename, err, context));
+    module = llvm::parseIRFile( filename, err, context);
     if( module.get() == 0 ) {
       config.out() << "Bitcode parsing failed!!";
     }
@@ -534,9 +565,7 @@ namespace cfrontend{
     passMan.add( new SplitAtAssumePass() );
     if( config.isOutLLVMcfg() )
       passMan.add( llvm::createCFGPrinterPass() );
-    passMan.add( new BuildSimpleMultiThreadedProgram<ExprHandler>( eHandler,
-                                                                   program ) );
-
+    passMan.add( new BuildSMTProgram<ExprHandler>( eHandler, config, program ) );
     passMan.run( *module.get() );
 
     return program;

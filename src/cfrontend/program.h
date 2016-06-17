@@ -108,15 +108,15 @@ public:
     threads[tid]->errorLocation = threads[tid]->locations[lid];
   }
 
-  location_id_type getStartLocation (thread_id_type tid ) {
+  location_id_type getStartLocation (thread_id_type tid ) const {
     return threads[tid]->startLocation.lid;
   }
 
-  location_id_type getFinalLocation (thread_id_type tid ) {
-    return threads[tid]->finalLocation.lid;
+  location_id_type getFinalLocation (thread_id_type tid ) const {
+    return threads[tid]->finalLocation->lid;
   }
 
-  location_id_type getErrorLocation (thread_id_type tid ) {
+  location_id_type getErrorLocation (thread_id_type tid ) const {
     return threads[tid]->errorLocation.lid;
   }
 

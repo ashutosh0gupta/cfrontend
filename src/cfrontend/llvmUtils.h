@@ -17,7 +17,7 @@ namespace cfrontend{
   // access DEBUG information to get the original names of ssa variables
   void buildLocalNameMap( const llvm::Function&,
                           std::map<const llvm::Value*, std::string>& );
-  int readInt( const llvm::Constant* );
+  int readInt( const llvm::ConstantInt* );
 
   // should not be visible to other files. TODO: should it be removed??
   void printMetaData( std::ostream& os, llvm::MDNode* md );
