@@ -37,7 +37,7 @@
   void c2bc( std::string& filename, std::string& outname ) {
     // make a system call
     std::ostringstream cmd;
-    cmd << "clang -emit-llvm -O0 -g " << filename << " -o " << outname << " -c";
+    cmd << "clang-3.6 -emit-llvm -O0 -g " << filename << " -o " << outname << " -c";
     if( system( cmd.str().c_str() ) != 0 ) exit(1);
   }
 

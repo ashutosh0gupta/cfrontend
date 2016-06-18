@@ -141,6 +141,7 @@ namespace cfrontend{
       //llvm::MDNode* iDbg = NULL;
       std::string str;
       unsigned lineNum = 0;
+      const llvm::DebugLoc& dbgLoc = I->getDebugLoc();
       if( const llvm::DbgDeclareInst* dDecl =
           llvm::dyn_cast<llvm::DbgDeclareInst>(I) ) {
         // cfrontend_error( "buildLocalNameMap should be called only after"
@@ -160,6 +161,7 @@ namespace cfrontend{
         //iDbg = I->getMetadata( "dbg" );
       }
       if( var ) {
+        //to look at the scope field
         // check if there has been a declaration with same name with different
         // line number
         auto it = declarationLocationMap.find( str );
