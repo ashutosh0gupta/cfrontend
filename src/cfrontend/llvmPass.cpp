@@ -31,6 +31,8 @@
 #include "llvm/Support/Dwarf.h"
 
 #include "llvm/Analysis/CFGPrinter.h"
+#include "llvm/Analysis/DependenceAnalysis.h"
+#include "llvm/Analysis/MemoryDependenceAnalysis.h"
 
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
@@ -552,7 +554,7 @@ namespace cfrontend{
     llvm::PassManager passMan;
     llvm::PassRegistry& reg = *llvm::PassRegistry::getPassRegistry();
     llvm::initializeAnalysis(reg);
-
+    llvm::initializeDependenceAnalysisPass(reg);
     // what is this datalayout thing? is it important??
     // llvm::DataLayout *dl = NULL;
     // const std::string& moduleDataLayout = module.get()->getDataLayout();
@@ -561,13 +563,41 @@ namespace cfrontend{
     // if( dl ) passMan.add( dl );
     // passMan.add( llvm::createInternalizePass() );
 
+    llvm::FunctionPass* depPass = llvm::createDependenceAnalysisPass();
+    llvm::DependenceAnalysis* dPass = (llvm::DependenceAnalysis*)(depPass);
+
     passMan.add( llvm::createPromoteMemoryToRegisterPass() );
     passMan.add( new SplitAtAssumePass() );
     if( config.isOutLLVMcfg() )
       passMan.add( llvm::createCFGPrinterPass() );
+    passMan.add( depPass );
     passMan.add( new BuildSMTProgram<ExprHandler>( eHandler, config, program ) );
     passMan.run( *module.get() );
-
+    // if( const llvm::DependenceAnalysis* dPass = llvm::dyn_cast<llvm::DependenceAnalysis>(depPass) )
+    auto& OS = llvm::outs();
+    for( auto it= module->begin(),end_it = module->end(); it != end_it; ++it ) {
+      llvm::Function* f = it;
+      for( auto SI = inst_begin(f), SE = inst_end(f);SI != SE; ++SI){
+        if(llvm::isa<llvm::StoreInst>(*SI) || llvm::isa<llvm::LoadInst>(*SI)) {
+          for( auto DI = SI, DE = inst_end(f); DI != DE; ++DI ) {
+            if(llvm::isa<llvm::StoreInst>(*DI)||llvm::isa<llvm::LoadInst>(*DI)){
+              if( auto D = dPass->depends(&*SI, &*DI, true) ) {
+                D->dump( llvm::outs() );
+                for (unsigned l = 1; l <= D->getLevels(); l++) {
+                  if( D->isSplitable(l) ) {
+                    OS << "da analyze - split level = " << l
+                       << ", iteration = " << *dPass->getSplitIteration(*D, l)
+                       << "!\n";
+                  }
+                }
+              }
+              else
+                OS << "none!\n";
+            }
+          }
+        }
+      }
+    }
     return program;
   }
 
