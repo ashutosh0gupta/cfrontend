@@ -1,0 +1,191 @@
+//---------------------------------------------
+// program object returned after analyzing llvm
+// we wish to avoid a complex data structure
+// comming out of llvm
+
+#ifndef CFRONTEND_PROGRAM_H
+#define CFRONTEND_PROGRAM_H
+
+#include "cfrontend/utils.h"
+
+#include <set>
+#include <map>
+#include <vector>
+
+namespace cfrontend{
+
+  typedef size_t ThrId;
+  typedef size_t BlockId;
+
+  struct Loc{
+    ThrId tid;
+    size_t l;
+
+    // comparison function for acting as a key in maps and sets
+    friend bool operator<( Loc const & a, Loc const & b ) {
+      return COMPARE_OBJ2( a, b, tid, l );
+    }
+
+    inline friend std::ostream& operator<<( std::ostream& os, Loc e ) {
+      os << e.tid << "." << e.l;
+      return os;
+    }
+  };
+
+  typedef size_t Label;
+
+  template<class expr>
+  class SimpleMultiThreadedProgram{
+  public:
+    struct Block{
+      Block( BlockId bid_, ThrId tid_, Loc src_, Loc dst_,
+             Label l_, expr& rho_ )
+        : bid(bid_)
+        , tid(tid_)
+        , src(src_)
+        , dst(dst_)
+        , l(l_)
+        , rho(rho_ ) {
+        if( l_ == 0 ) {
+          l = src.l;
+        }else{
+          assert( l_ > (1 << 25) );
+          l = l_;
+        }
+      }
+      BlockId bid;
+      ThrId tid;
+      Loc src;
+      Loc dst;
+      Label l;  //Default src Loc
+      expr rho;
+      // TODO: we need to write a comparision function
+      friend bool operator<( Block const & a, Block const & b ) {
+        return a.bid < b.bid;
+      }
+    };
+
+    SimpleMultiThreadedProgram( size_t thrNum_, expr& init_ )
+      : thrNum(thrNum_)
+      , init( init_) {
+      maxLoc   = 0;
+      maxBlock = 0;
+    }
+
+    //------------------------------------------------------------------------
+    //set functions
+    Loc createFreshLocation( ThrId tid ) {
+      Loc loc;
+      loc.tid = tid;
+      loc.l = maxLoc;
+      maxLoc++;
+      return loc;
+    };
+
+    void setStartLocation( ThrId tid, Loc& loc ) {
+      start_location[tid] = loc;
+    }
+
+    void addBlock( ThrId t, Loc& src, Loc& dst, Label l, expr& e ) {
+      assert( src.l < maxLoc && dst.l < maxLoc );
+      assert( src.tid == dst.tid );
+      cfgSuccsessor[src].insert(dst);
+      cfgPredecessor[dst].insert(src);
+      Block b( maxBlock, t, src, dst, l, e );
+      maxBlock++;
+      blockMap[ std::make_pair(src,dst) ].insert( b );
+    }
+
+    void addBlock( ThrId t, Loc& src, Loc& dst, expr& e ) {
+      addBlock( t, src, dst, (Label)0, e );
+    }
+
+    void addBlock( int t, Loc& src, Loc& dst, expr& e ) {
+      if( t < 0 || t >= thrNum )
+        cfrontend_error( "out of range thread id!" );
+      addBlock( (ThrId)t, src, dst, e );
+    }
+
+    void addGlobal( expr& e, expr& ep ) {
+      assert( e != ep );
+      assert( e.is_app() && ep.is_app() );
+      // the following check does not work for z3::expr because it redfines
+      // the == operator, we need to have our own c++ wrapper
+      // assert( !exists( globals, e ) && !exists( globals, ep ) );
+      globals.push_back( e );
+      globalsP.push_back( ep );
+    }
+
+    void addLocal( ThrId t, expr& e, expr& ep ) {
+      assert( t < thrNum );
+      assert( e.is_app() && ep.is_app() );
+      // assert( !exists( locals[t], e ) && !exists( localsP[t], ep ) );
+      locals[t].push_back( e );
+      localsP[t].push_back( ep );
+    }
+
+    void setInitialStates( expr& init_ ) {
+      init = init_;
+    }
+
+    //------------------------------------------------------------------------
+    // get functions
+    // void enabledTransitions( ThrId, ..... , std::vector<block>& );
+    size_t getThrNum() const { return thrNum; }
+
+    // TODO: add printing functions
+    void printDotty( std::ostream& os ) {
+      os << "digraph program" << "{\n";
+      os << "init" << "[shape=box label=\" initial states : " << init <<"\"];\n";
+      for( unsigned i = 0; i < getThrNum(); i++ ) {
+        os << "subgraph thr_" << i << "{\n";
+        std::map< Loc, std::set<Loc> >::iterator it  = cfgSuccsessor.begin();
+        std::map< Loc, std::set<Loc> >::iterator end = cfgSuccsessor.end();
+        for(; it != end; it++ ) {
+          const Loc& src = it->first;
+          if( src.tid != i ) continue;
+          std::set<Loc>& dests = it->second;
+          std::set<Loc>::iterator it_d  = dests.begin();
+          std::set<Loc>::iterator end_d  = dests.end();
+          for( ;it_d != end_d; it_d++ ) {
+            const Loc& dst = *it_d;
+            const std::set<Block>& bs = blockMap[std::make_pair( src, dst ) ];
+            typename std::set<Block>::iterator it_b  = bs.begin();
+            typename std::set<Block>::iterator end_b = bs.end();
+            for(; it_b != end_b; it_b++) {
+              const Block& b = *it_b;
+              os << "b" << b.bid << "[shape=box label=\"" << b.rho <<"\"];\n";
+              os << src << "-> b" << b.bid << "->" << dst << ";\n";
+            }
+          }
+        }
+        os << "}\n";
+      }
+      os << "}\n";
+    }
+
+    void computeCutPoints() {
+      // backedge 
+    }
+
+  private:
+    const size_t thrNum;
+    size_t maxLoc;
+    size_t maxBlock;
+    std::vector<ThrId> threads;
+    std::vector<expr> globals;
+    std::vector<expr> globalsP; // name for next variables
+    std::map< ThrId, std::vector<expr> > locals;
+    std::map< ThrId, std::vector<expr> > localsP;
+    std::map< ThrId, Loc > start_location;
+    std::set<size_t> locations;
+    std::map< ThrId, std::set<Loc> > cutPoints;
+    expr init;
+    std::map< std::pair<Loc,Loc>, std::set<Block> > blockMap;
+    std::map< Loc, std::set<Loc> > cfgSuccsessor;
+    std::map< Loc, std::set<Loc> > cfgPredecessor;
+  };
+
+}
+
+#endif

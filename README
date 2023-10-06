@@ -1,0 +1,57 @@
+==============================================================================
+                                     COMPILING CFRONTEND
+==============================================================================
+
+$ ./init-autotools
+$ mkdir build
+$ cd build
+$ ../configure --with-llvm=[if llvm is not available at std location]
+#../configure --with-z3=$HOME/research/code/externalTools/z3-interface/z3-latest
+$ make
+
+==============================================================================
+ converting c(c) file to llvm bytecode(bc)
+==============================================================================
+
+$clang -emit-llvm in.c -o out.bc -c
+
+==============================================================================
+ AUTHORS
+==============================================================================
+
+Ashutosh Gupta <agupta@tifr.res.in>
+Bernhard Kragl <bkragl@ist.ac.at>
+
+==============================================================================
+ HINTS FOR DEVELOPERS
+==============================================================================
+
+For debugging
+-------------
+
+$../configure --enable-debug --disable-optimization --with-z3=[z3-path]
+$ make
+
+Running cfrontend in profiling mode
+------------------------------
+
+$../configure --enable-profiling
+$ make clean && make
+$ ... run the tool normally... 
+$ gprof -P -b tint > tmp/profile
+
+To view non silent run of make
+------------------------------
+
+$make V=1
+
+Tool to analyze an object file
+------------------------------
+
+$nm
+
+Various cleans in make file
+------------------------------
+
+$make clean
+$make distclean
